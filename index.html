@@ -33,6 +33,19 @@
       margin-top: 0;
       margin-bottom: 15px;
     }
+    
+    /* 冒頭のメッセージ */
+    .intro-message {
+      background-color: #fff0f5;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #555;
+      border: 1px solid #f8bbd0;
+    }
+
     .section { margin-bottom: 20px; /* 余白削減 */ }
     .section-title {
       font-size: 16px; /* 少し縮小 */
@@ -231,19 +244,26 @@
 <body>
   <div class="container">
     <h1>aiko セットリスト投稿フォーム</h1>
+
+    <!-- 冒頭のメッセージ -->
+    <div class="intro-message">
+      セトリ投稿のご協力ありがとうございます！<br>
+      投稿後、他の方の投稿や色々な情報と照らし合わせてLLDBに反映させていただきます。
+    </div>
+
     <form id="setlist-form">
 
-      <!-- ライブ情報 -->
+      <!-- 投稿者 (順序変更: 最初へ) -->
+      <div class="section">
+        <div class="section-title">投稿者 (任意)</div>
+        <input type="text" id="submitter-name" placeholder="お名前を入力できます">
+      </div>
+
+      <!-- ライブ情報 (順序変更: 2番目へ) -->
       <div class="section">
         <div class="section-title">ライブ情報</div>
         <select id="live-select" required><option value="">-- 読み込み中... --</option></select>
         <div id="live-details" class="live-details" style="display: none;"></div>
-      </div>
-
-      <!-- 投稿者 -->
-      <div class="section">
-        <div class="section-title">投稿者 (任意)</div>
-        <input type="text" id="submitter-name" placeholder="お名前を入力できます">
       </div>
 
       <!-- セットリスト -->
@@ -319,9 +339,10 @@
     let sheetData = { liveInfo: [], songList: [] };
 
     window.addEventListener('load', () => {
-      // 1. まずライブ情報を読み込む
-      showLoader('ライブ情報を読み込み中...');
+      // 1. ライブ情報を読み込む（画面ロックはしない）
       loadLiveInfo();
+      // 初期状態で1つ曲枠を追加（選択肢は読み込み中となる）
+      addSongEntry();
       
       // SortableJSの初期化
       const el = document.getElementById('setlist-container');
@@ -351,19 +372,15 @@
             liveSelect.innerHTML = '<option value="">-- ライブを選択してください --</option>';
             sheetData.liveInfo.forEach((live, i) => liveSelect.add(new Option(live.display, i)));
             
-            // ライブ情報が取れたら画面操作可能にする
-            hideLoader();
-            addSongEntry(); // 初期表示用の曲入力欄を追加（この時点ではまだ曲リストはないかも）
-            
             // 2. 続けてバックグラウンドで曲情報を読み込む
             loadSongList();
           } else {
              // 万が一古いGASコードで全データが返ってきた場合のフォールバック
              if (data.songList) sheetData.songList = data.songList;
-             hideLoader();
+             updateAllSongSelects(); // 取得できた曲情報で更新
           }
         })
-        .catch(e => { alert('ライブ情報の読み込み失敗: ' + e); hideLoader(); });
+        .catch(e => { alert('ライブ情報の読み込み失敗: ' + e); });
     }
 
     // 曲情報の読み込み (バックグラウンド)
