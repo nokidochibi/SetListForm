@@ -319,22 +319,16 @@
     let sheetData = { liveInfo: [], songList: [] };
 
     window.addEventListener('load', () => {
-      showLoader('データを読み込み中...');
-      fetch(GAS_API_URL).then(res => res.json()).then(data => {
-        sheetData = data;
-        const liveSelect = document.getElementById('live-select');
-        liveSelect.innerHTML = '<option value="">-- ライブを選択してください --</option>';
-        sheetData.liveInfo.forEach((live, i) => liveSelect.add(new Option(live.display, i)));
-        addSongEntry();
-        hideLoader();
-      }).catch(e => { alert('読み込み失敗: ' + e); hideLoader(); });
+      // 1. まずライブ情報を読み込む
+      showLoader('ライブ情報を読み込み中...');
+      loadLiveInfo();
       
       // SortableJSの初期化
       const el = document.getElementById('setlist-container');
       new Sortable(el, {
         animation: 150,
-        handle: '.song-handle', // ハンドルクラスでのみドラッグ可能
-        ghostClass: 'sortable-ghost' // ドラッグ中のクラス
+        handle: '.song-handle',
+        ghostClass: 'sortable-ghost'
       });
       
       document.getElementById('image-file').addEventListener('change', handleImageUpload);
@@ -345,6 +339,46 @@
         det.textContent = `${live.region}：${live.venue}`; det.style.display='block';
       });
     });
+
+    // ライブ情報の読み込み
+    function loadLiveInfo() {
+      fetch(GAS_API_URL + '?type=live')
+        .then(res => res.json())
+        .then(data => {
+          if (data.liveInfo) {
+            sheetData.liveInfo = data.liveInfo;
+            const liveSelect = document.getElementById('live-select');
+            liveSelect.innerHTML = '<option value="">-- ライブを選択してください --</option>';
+            sheetData.liveInfo.forEach((live, i) => liveSelect.add(new Option(live.display, i)));
+            
+            // ライブ情報が取れたら画面操作可能にする
+            hideLoader();
+            addSongEntry(); // 初期表示用の曲入力欄を追加（この時点ではまだ曲リストはないかも）
+            
+            // 2. 続けてバックグラウンドで曲情報を読み込む
+            loadSongList();
+          } else {
+             // 万が一古いGASコードで全データが返ってきた場合のフォールバック
+             if (data.songList) sheetData.songList = data.songList;
+             hideLoader();
+          }
+        })
+        .catch(e => { alert('ライブ情報の読み込み失敗: ' + e); hideLoader(); });
+    }
+
+    // 曲情報の読み込み (バックグラウンド)
+    function loadSongList() {
+      fetch(GAS_API_URL + '?type=songs')
+        .then(res => res.json())
+        .then(data => {
+          if (data.songList) {
+            sheetData.songList = data.songList;
+            // 既に表示されている曲入力欄のプルダウンを更新する
+            updateAllSongSelects();
+          }
+        })
+        .catch(e => console.error('曲情報の読み込み失敗: ', e)); // 裏で失敗してもアラートは出さないでおく
+    }
 
     function handleImageUpload(e) {
       const file = e.target.files[0];
@@ -366,10 +400,42 @@
       reader.readAsDataURL(file);
     }
 
+    // 曲の選択肢を生成して設定する関数
+    function renderSongOptions(selectElement) {
+        // 現在の選択値を保存
+        const currentValue = selectElement.value;
+        
+        selectElement.innerHTML = '<option value="">-- 曲を選択してください --</option>';
+        sheetData.songList.forEach(s => {
+            selectElement.add(new Option(s.title, s.title));
+        });
+        
+        // 値を復元
+        if (currentValue) {
+            selectElement.value = currentValue;
+        }
+        selectElement.disabled = false;
+    }
+
+    // 全ての曲プルダウンを更新する
+    function updateAllSongSelects() {
+        const selects = document.querySelectorAll('.song-select');
+        selects.forEach(sel => renderSongOptions(sel));
+    }
+
     function addSongEntry() {
       const clone = document.getElementById('song-entry-template').content.cloneNode(true);
       const sel = clone.querySelector('.song-select');
-      sheetData.songList.forEach(s => sel.add(new Option(s.title, s.title)));
+      
+      // 曲データがあるかどうかで挙動を変える
+      if (sheetData.songList && sheetData.songList.length > 0) {
+          renderSongOptions(sel);
+      } else {
+          // まだ読み込み中の場合
+          sel.innerHTML = '<option>データを読み込み中...</option>';
+          sel.disabled = true;
+      }
+      
       const name = 'encore-' + Date.now() + Math.random();
       clone.querySelectorAll('input[type="radio"]').forEach(r => r.name = name);
       document.getElementById('setlist-container').appendChild(clone);
@@ -387,7 +453,7 @@
       let hasSong = false;
       document.querySelectorAll('.song-entry').forEach(entry => {
         const title = entry.querySelector('.song-select').value;
-        if (title) {
+        if (title && title !== "データを読み込み中...") {
           hasSong = true;
           const isMedley = entry.querySelector('.is-medley').checked ? ' (メドレー)' : '';
           const encVal = entry.querySelector('input[type="radio"]:checked').value;
@@ -395,7 +461,12 @@
           html += `<li>${title}${isMedley}${encTxt}</li>`;
         }
       });
-      if (!hasSong) return alert('曲を1曲以上選択してください。');
+      if (!hasSong) {
+          if (sheetData.songList.length === 0) {
+              return alert('曲データを読み込み中です。少々お待ちください。');
+          }
+          return alert('曲を1曲以上選択してください。');
+      }
       html += '</ol>';
       
       const imgPv = document.getElementById('image-preview');
@@ -418,11 +489,13 @@
       };
       document.querySelectorAll('.song-entry').forEach(entry => {
         const title = entry.querySelector('.song-select').value;
-        if (title) formData.songs.push({
-          title: title,
-          isMedley: entry.querySelector('.is-medley').checked,
-          encore: entry.querySelector('input[type="radio"]:checked').value
-        });
+        if (title && title !== "データを読み込み中...") {
+            formData.songs.push({
+              title: title,
+              isMedley: entry.querySelector('.is-medley').checked,
+              encore: entry.querySelector('input[type="radio"]:checked').value
+            });
+        }
       });
       
       const cvs = document.getElementById('image-canvas');
