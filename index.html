@@ -248,7 +248,7 @@
     <!-- 冒頭のメッセージ -->
     <div class="intro-message">
       セトリ投稿のご協力ありがとうございます！<br>
-      投稿後、他の方の投稿や色々な情報と照らし合わせてLLDBに反映させていただきます。
+      投稿後、他の方の投稿や色々な情報と照らし合わせてLLDBの更新に活用させていただきます😊
     </div>
 
     <form id="setlist-form">
@@ -527,7 +527,7 @@
           if(res.status === 'success') {
             closeModal(); hideLoader(); resetForm();
             const msg = document.getElementById('success-message');
-            msg.innerHTML = '投稿が完了しました。<br>ご協力ありがとうございます！<br><br>結果は精査のうえ、後日『<a href="https://x.com/noki_dochibi/status/1977296153512398850?s=46&t=M9RS39PWU4T9DrG7RpQmEA" target="_blank" rel="noopener noreferrer">Love Like Data Base</a>』に反映させていただきます😊';
+            msg.innerHTML = '投稿が完了しました。<br>ご協力ありがとうございます！<br><br>他の方の投稿や色々な情報と照らし合わせて、後日『<a href="https://x.com/noki_dochibi/status/1977296153512398850?s=46&t=M9RS39PWU4T9DrG7RpQmEA" target="_blank" rel="noopener noreferrer">Love Like DataBase</a>』の更新に活用させていただきます😊';
             document.getElementById('success-modal-overlay').style.display = 'block';
           } else throw new Error(res.message);
         })
